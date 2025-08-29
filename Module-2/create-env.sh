@@ -25,14 +25,25 @@ then
 else
 echo "Beginning to launch $5 EC2 instances..."
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/run-instances.html
-aws ec2 run-instances 
+aws ec2 run-instances \
+    --image-id $1 \
+    --instance-type $2 \
+    --key-name $3 \
+    --security-group-ids $4 \
+    --count $5 \
+    --user-data file://$6 \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=module,Value=$7}]"
 
 #https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/wait/instance-running.html
 echo "Waiting until instances are in RUNNING state..."
 
 # Collect your running instance IDS
-# https://stackoverflow.com/questions/31744316/aws-cli-filter-or-logic
-INSTANCEIDS=
+INSTANCEIDS=$(aws ec2 describe-instances \
+    --filters "Name=instance-state-name,Values=running,pending" \
+              "Name=tag:Name,Values=module2-tag" \
+    --query 'Reservations[*].Instances[*].InstanceId' \
+    --output text)
+
 
 echo $INSTANCEIDS
 
@@ -40,7 +51,7 @@ echo $INSTANCEIDS
 # running state
 if [ "$INSTANCEIDS" != "" ]
   then
-    aws ec2 wait instance-running 
+    aws ec2 wait instance-running --instance-ids $INSTANCEIDS
     echo "Finished launching instances..."
   else
     echo 'There are no running or pending values in $INSTANCEIDS to wait for...'
