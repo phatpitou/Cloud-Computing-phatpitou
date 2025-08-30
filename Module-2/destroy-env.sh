@@ -8,8 +8,8 @@
 echo "Beginning destroy script for module-02..."
 
 # Collect Instance IDs
-INSTANCEIDS= $(aws ec2 describe-instances \
-    --filters "Name=instance-state-name,Values=running" \
+INSTANCEIDS=$(aws ec2 describe-instances \
+    --filters "Name=instance-state-name,Values=running,pending,stopped" \
               "Name=tag:Name,Values=module2-tag" \
     --query 'Reservations[*].Instances[*].InstanceId' \
     --output text)
