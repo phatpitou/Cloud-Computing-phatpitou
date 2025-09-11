@@ -49,10 +49,45 @@ VPCID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query "V
 echo "VPC ID: $VPCID"
 
 echo "Finding and storing the subnet IDs for defined in arguments.txt Availability Zone 1 and 2..."
-SUBNET2A=$(aws ec2 describe-subnets --output=text --query='Subnets[*].SubnetId' --filter "Name=availability-zone,Values=${10}" --filter "Name=vpc-id,Values=$VPCID")
-SUBNET2B=$(aws ec2 describe-subnets --output=text --query='Subnets[*].SubnetId' --filter "Name=availability-zone,Values=${11}" --filter "Name=vpc-id,Values=$VPCID")
+
+# Get subnet list and pick the first one explicitly
+SUBNET_LIST_A=$(aws ec2 describe-subnets \
+    --filters "Name=availability-zone,Values=${10}" "Name=vpc-id,Values=$VPCID" \
+    --query 'Subnets[*].SubnetId' \
+    --output text)
+
+SUBNET_LIST_B=$(aws ec2 describe-subnets \
+    --filters "Name=availability-zone,Values=${11}" "Name=vpc-id,Values=$VPCID" \
+    --query 'Subnets[*].SubnetId' \
+    --output text)
+
+# Extract just the first subnet ID from each list
+SUBNET2A=$(echo $SUBNET_LIST_A | awk '{print $1}')
+SUBNET2B=$(echo $SUBNET_LIST_B | awk '{print $1}')
+
 echo "Subnet AZ1: $SUBNET2A"
 echo "Subnet AZ2: $SUBNET2B"
+
+# Validate that we have single, valid subnet IDs
+if [[ "$SUBNET2A" =~ [[:space:]] ]]; then
+    echo "Error: SUBNET2A contains spaces: '$SUBNET2A'"
+    exit 1
+fi
+
+if [[ "$SUBNET2B" =~ [[:space:]] ]]; then
+    echo "Error: SUBNET2B contains spaces: '$SUBNET2B'"
+    exit 1
+fi
+
+if [[ -z "$SUBNET2A" ]] || [[ "$SUBNET2A" == "None" ]]; then
+    echo "Error: Could not find subnet in availability zone ${10}"
+    exit 1
+fi
+
+if [[ -z "$SUBNET2B" ]] || [[ "$SUBNET2B" == "None" ]]; then
+    echo "Error: Could not find subnet in availability zone ${11}"
+    exit 1
+fi
 
 # Create AWS EC2 Launch Template
 # https://awscli.amazonaws.com/v2/documentation/api/2.0.33/reference/ec2/create-launch-template.html
