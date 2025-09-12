@@ -28,93 +28,131 @@
 
 ltconfigfile="./config.json"
 
-if [ $# = 0 ]
-then
-  echo 'You do not have enough variable in your arugments.txt, perhaps you forgot to run: bash ./create-env.sh $(< ~/arguments.txt)'
+if [ $# = 0 ]; then
+  echo 'You do not have enough variables in your arguments.txt, perhaps you forgot to run: bash ./create-env.sh $(< ~/arguments.txt)'
   exit 1 
-elif ! [[ -a $ltconfigfile ]]
-  then
-   echo 'The launch template configuration JSON file does not exist - make sure you run/ran the command: bash ./create-lt-json.sh $(< ~/arguments.txt) command before running the create-env.sh $(< ~/arguments.txt)'
-   echo "Now exiting the program..."
-   exit 1
-# else run the creation logic
+elif ! [[ -a $ltconfigfile ]]; then
+  echo 'The launch template configuration JSON file does not exist - make sure you run/ran the command: bash ./create-lt-json.sh $(< ~/arguments.txt) before running create-env.sh'
+  echo "Now exiting the program..."
+  exit 1
 else
-if [ -a $ltconfigfile ]
-    then
+  if [ -a $ltconfigfile ]; then
     echo "Launch template data file: $ltconfigfile exists..." 
-fi
-echo "Finding and storing default VPCID value..."
-# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/describe-vpcs.html
-VPCID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query "Vpcs[*].VpcId" --output=text)
-echo $VPCID
+  fi
 
-echo "Finding and storing the subnet IDs for defined in arguments.txt Availability Zone 1 and 2..."
-SUBNET2A=$(aws ec2 describe-subnets --output=text --query='Subnets[*].SubnetId' --filter "Name=availability-zone,Values=${10}")
-SUBNET2B=$(aws ec2 describe-subnets --output=text --query='Subnets[*].SubnetId' --filter "Name=availability-zone,Values=${11}")
-echo $SUBNET2A
-echo $SUBNET2B
+  # Assign arguments to variables for clarity
+  image_id=$1
+  instance_type=$2
+  key_name=$3
+  security_group_ids=$4
+  count=$5
+  user_data_file=$6
+  tag_value=$7
+  target_group_name=$8
+  elb_name=$9
+  az1=${10}
+  az2=${11}
+  launch_template_name=${12}
+  asg_name=${13}
+  asg_min=${14}
+  asg_max=${15}
+  asg_desired=${16}
+  region=${17}
 
-# Create AWS EC2 Launch Template
-# https://awscli.amazonaws.com/v2/documentation/api/2.0.33/reference/ec2/create-launch-template.html
-echo "Creating the AutoScalingGroup Launch Template..."
-aws ec2 create-launch-template 
-echo "Launch Template created..."
+  echo "Finding and storing default VPCID value..."
+  VPCID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output=text --region "$region")
+  echo "Default VPC ID: $VPCID"
 
-# Retreive the Launch Template ID using a --query
-LAUNCHTEMPLATEID=
+  echo "Finding and storing the subnet IDs for Availability Zone 1 and 2..."
+  SUBNET2A=$(aws ec2 describe-subnets --filters "Name=availability-zone,Values=$az1" "Name=vpc-id,Values=$VPCID" --query 'Subnets[0].SubnetId' --output=text --region "$region")
+  SUBNET2B=$(aws ec2 describe-subnets --filters "Name=availability-zone,Values=$az2" "Name=vpc-id,Values=$VPCID" --query 'Subnets[0].SubnetId' --output=text --region "$region")
+  echo "Subnet AZ1: $SUBNET2A"
+  echo "Subnet AZ2: $SUBNET2B"
 
-echo 'Creating the TARGET GROUP and storing the ARN in $TARGETARN'
-# https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/create-target-group.html
-TARGETARN=
-echo $TARGETARN
+  echo "Creating the AutoScalingGroup Launch Template..."
+  aws ec2 create-launch-template \
+    --launch-template-name "$launch_template_name" \
+    --version-description "v1" \
+    --launch-template-data file://$ltconfigfile \
+    --region "$region"
+  echo "Launch Template created..."
 
-echo "Creating ELBv2 Elastic Load Balancer..."
-#https://awscli.amazonaws.com/v2/documentation/api/2.0.34/reference/elbv2/create-load-balancer.html
-ELBARN=
-echo $ELBARN
+  echo "Retrieving the Launch Template ID..."
+  LAUNCHTEMPLATEID=$(aws ec2 describe-launch-templates --launch-template-names "$launch_template_name" --query "LaunchTemplates[0].LaunchTemplateId" --output text --region "$region")
+  echo "Launch Template ID: $LAUNCHTEMPLATEID"
 
-# Decrease the deregistration timeout (deregisters faster than the default 300 second timeout per instance)
-# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/modify-target-group-attributes.html
-aws elbv2 modify-target-group-attributes --target-group-arn $TARGETARN --attributes Key=deregistration_delay.timeout_seconds,Value=30
+  echo "Creating the TARGET GROUP and storing the ARN in TARGETARN..."
+  TARGETARN=$(aws elbv2 create-target-group \
+    --name "$target_group_name" \
+    --protocol HTTP \
+    --port 80 \
+    --vpc-id "$VPCID" \
+    --health-check-protocol HTTP \
+    --health-check-path / \
+    --region "$region" \
+    --query 'TargetGroups[0].TargetGroupArn' \
+    --output text)
+  echo "Target Group ARN: $TARGETARN"
 
-# AWS elbv2 wait for load-balancer available
-# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/wait/load-balancer-available.html
-echo "Waiting for load balancer to be available..."
-aws elbv2 wait load-balancer-available
-echo "Load balancer available..."
-# create AWS elbv2 listener for HTTP on port 80
-#https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/create-listener.html
-aws elbv2 create-listener 
+  echo "Creating ELBv2 Elastic Load Balancer..."
+  ELBARN=$(aws elbv2 create-load-balancer \
+    --name "$elb_name" \
+    --subnets "$SUBNET2A" "$SUBNET2B" \
+    --security-groups "$security_group_ids" \
+    --region "$region" \
+    --query 'LoadBalancers[0].LoadBalancerArn' \
+    --output text)
+  echo "Load Balancer ARN: $ELBARN"
 
-echo 'Creating Auto Scaling Group...'
-# Create Autoscaling group ASG - needs to come after Target Group is created
-# Create autoscaling group
-# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/autoscaling/create-auto-scaling-group.html
-aws autoscaling create-auto-scaling-group 
+  echo "Decreasing deregistration timeout to 30 seconds..."
+  aws elbv2 modify-target-group-attributes \
+    --target-group-arn "$TARGETARN" \
+    --attributes Key=deregistration_delay.timeout_seconds,Value=30 \
+    --region "$region"
 
-echo 'Waiting for Auto Scaling Group to spin up EC2 instances and attach them to the TargetARN...'
-# Create waiter for registering targets
-# https://docs.aws.amazon.com/cli/latest/reference/elbv2/wait/target-in-service.html
-aws elbv2 wait target-in-service
-echo "Targets attached to Auto Scaling Group..."
+  echo "Waiting for load balancer to be available..."
+  aws elbv2 wait load-balancer-available --load-balancer-arns "$ELBARN" --region "$region"
+  echo "Load balancer available..."
 
-# Collect Instance IDs
-# https://stackoverflow.com/questions/31744316/aws-cli-filter-or-logic
-INSTANCEIDS=$(aws ec2 describe-instances --output=text --query 'Reservations[*].Instances[*].InstanceId' --filter "Name=instance-state-name,Values=running,pending")
+  echo "Creating listener on port 80 forwarding to target group..."
+  aws elbv2 create-listener \
+    --load-balancer-arn "$ELBARN" \
+    --protocol HTTP \
+    --port 80 \
+    --default-actions Type=forward,TargetGroupArn="$TARGETARN" \
+    --region "$region"
 
-if [ "$INSTANCEIDS" != "" ]
-  then
-    aws ec2 wait instance-running
+  echo "Creating Auto Scaling Group..."
+  aws autoscaling create-auto-scaling-group \
+    --auto-scaling-group-name "$asg_name" \
+    --launch-template LaunchTemplateId="$LAUNCHTEMPLATEID",Version=1 \
+    --min-size "$asg_min" \
+    --max-size "$asg_max" \
+    --desired-capacity "$asg_desired" \
+    --vpc-zone-identifier "$SUBNET2A,$SUBNET2B" \
+    --target-group-arns "$TARGETARN" \
+    --tags Key=Name,Value="$tag_value",PropagateAtLaunch=true \
+    --region "$region"
+
+  echo "Waiting for Auto Scaling Group to spin up EC2 instances and attach them to the Target Group..."
+  aws elbv2 wait target-in-service --target-group-arn "$TARGETARN" --region "$region"
+  echo "Targets attached to Auto Scaling Group..."
+
+  echo "Collecting Instance IDs..."
+  INSTANCEIDS=$(aws ec2 describe-instances \
+    --filters "Name=instance-state-name,Values=running,pending" "Name=tag:Name,Values=$tag_value" \
+    --query 'Reservations[*].Instances[*].InstanceId' --output text --region "$region")
+
+  if [ -n "$INSTANCEIDS" ]; then
+    echo "Waiting for instances to be running..."
+    aws ec2 wait instance-running --instance-ids $INSTANCEIDS --region "$region"
     echo "Finished launching instances..."
   else
-    echo 'There are no running or pending values in $INSTANCEIDS to wait for...'
-fi 
+    echo "No running or pending instances found with tag $tag_value."
+  fi
 
+  echo "Retrieving ELB DNS Name..."
+  URL=$(aws elbv2 describe-load-balancers --load-balancer-arns "$ELBARN" --query 'LoadBalancers[0].DNSName' --output text --region "$region")
+  echo "Access your application at: http://$URL"
 
-# Retreive ELBv2 URL via aws elbv2 describe-load-balancers --query and print it to the screen
-#https://awscli.amazonaws.com/v2/documentation/api/latest/reference/elbv2/describe-load-balancers.html
-URL=
-echo $URL
-
-# end of outer fi - based on arguments.txt content
 fi
