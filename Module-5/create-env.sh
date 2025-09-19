@@ -167,12 +167,12 @@ else
 
   # Replace these filenames with actual names from your zip file
   echo "Uploading 2 images to $s3_bucket_one"
-  aws s3 cp ./images_for_s3/elevate.webp s3://$s3_bucket_one/elevate.webp --region $region
-  aws s3 cp ./images_for_s3/illinoistech.png s3://$s3_bucket_one/illinoistech.png --region $region
+  aws s3 cp ./images_for_s3/images/elevate.webp s3://$s3_bucket_one/images/elevate.webp --region $region
+  aws s3 cp ./images_for_s3/images/illinoistech.png s3://$s3_bucket_one/images/illinoistech.png --region $region
 
   echo "Uploading 2 images to $s3_bucket_two"
-  aws s3 cp ./images_for_s3/ranking.jpg s3://$s3_bucket_two/ranking.jpg --region $region
-  aws s3 cp ./images_for_s3/rohit.jpg s3://$s3_bucket_two/rohit.jpg --region $region
+  aws s3 cp ./images_for_s3/images/ranking.jpg s3://$s3_bucket_two/images/ranking.jpg --region $region
+  aws s3 cp ./images_for_s3/images/rohit.jpg s3://$s3_bucket_two/images/rohit.jpg --region $region
 
   echo "S3 uploads complete."
 
