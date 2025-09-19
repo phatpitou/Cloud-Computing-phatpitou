@@ -1,38 +1,17 @@
 #!/bin/bash
 ##############################################################################
-# Module-04
-# This assignment requires you to modify your previous scripts and use the 
-# Launch Template and Autoscaling group commands for creating EC2 instances
-# You will need an additional script to generate a JSON file with parameters
-# for your launch template
-# 
-# You will need to define these variables in a txt file named: arguments.txt
-# 1 image-id
-# 2 instance-type
-# 3 key-name
-# 4 security-group-ids
-# 5 count
-# 6 user-data file name
-# 7 Tag (use the module name - later we can use the tags to query/filter
-# 8 Target Group (use your initials)
-# 9 elb-name (use your initials)
-# 10 Availability Zone 1
-# 11 Availablitty Zone 2
-# 12 Launch Template Name
-# 13 ASG name
-# 14 ASG min
-# 15 ASG max
-# 16 ASG desired
-# 17 AWS Region for LaunchTemplate (use your default region)
+# Module-05 (extends Module-04)
+# Adds Elastic Block Storage and S3 bucket creation with object uploads
 ##############################################################################
 
 ltconfigfile="./config.json"
 
-if [ $# = 0 ]; then
-  echo 'You do not have enough variables in your arguments.txt, perhaps you forgot to run: bash ./create-env.sh $(< ~/arguments.txt)'
+if [ $# -lt 20 ]; then
+  echo 'You do not have enough variables in your arguments.txt, please ensure you have 20 arguments.'
+  echo 'Run: bash ./create-env.sh $(< ~/arguments.txt)'
   exit 1 
 elif ! [[ -a $ltconfigfile ]]; then
-  echo 'The launch template configuration JSON file does not exist - make sure you run/ran the command: bash ./create-lt-json.sh $(< ~/arguments.txt) before running create-env.sh'
+  echo 'The launch template configuration JSON file does not exist - run: bash ./create-lt-json.sh $(< ~/arguments.txt) first'
   echo "Now exiting the program..."
   exit 1
 else
@@ -58,6 +37,9 @@ else
   asg_max=${15}
   asg_desired=${16}
   region=${17}
+  ebs_size=${18}
+  s3_bucket_one=${19}
+  s3_bucket_two=${20}
 
   echo "Finding and storing default VPCID value..."
   VPCID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output=text --region "$region")
@@ -150,6 +132,51 @@ else
   else
     echo "No running or pending instances found with tag $tag_value."
   fi
+
+  # --- New Module 5 additions start here ---
+
+  echo "Installing unzip if needed..."
+  sudo apt-get update -y
+  sudo apt-get install -y unzip
+
+  echo "Creating S3 bucket one: $s3_bucket_one"
+  aws s3 mb s3://$s3_bucket_one --region $region
+  if [ $? -eq 0 ]; then
+    echo "S3 bucket $s3_bucket_one created."
+  else
+    echo "S3 bucket $s3_bucket_one creation failed or bucket exists."
+  fi
+
+  echo "Creating S3 bucket two: $s3_bucket_two"
+  aws s3 mb s3://$s3_bucket_two --region $region
+  if [ $? -eq 0 ]; then
+    echo "S3 bucket $s3_bucket_two created."
+  else
+    echo "S3 bucket $s3_bucket_two creation failed or bucket exists."
+  fi
+
+  echo "Unzipping images..."
+  unzip -o O010QuAjT8yYHUbNNkH4tg_64e1382d4556483296fc0ac48e26faf1_images.zip -d ./images_for_s3/
+  if [ $? -ne 0 ]; then
+    echo "Failed to unzip images."
+    exit 1
+  fi
+
+  echo "Unzipped files:"
+  ls ./images_for_s3/
+
+  # Replace these filenames with actual names from your zip file
+  echo "Uploading 2 images to $s3_bucket_one"
+  aws s3 cp ./images_for_s3/elevate.webp s3://$s3_bucket_one/elevate.webp --region $region
+  aws s3 cp ./images_for_s3/illinoistech.png s3://$s3_bucket_one/illinoistech.png --region $region
+
+  echo "Uploading 2 images to $s3_bucket_two"
+  aws s3 cp ./images_for_s3/ranking.jpg s3://$s3_bucket_two/ranking.jpg --region $region
+  aws s3 cp ./images_for_s3/rohit.jpg s3://$s3_bucket_two/rohit.jpg --region $region
+
+  echo "S3 uploads complete."
+
+  # --- End of Module 5 additions ---
 
   echo "Retrieving ELB DNS Name..."
   URL=$(aws elbv2 describe-load-balancers --load-balancer-arns "$ELBARN" --query 'LoadBalancers[0].DNSName' --output text --region "$region")
