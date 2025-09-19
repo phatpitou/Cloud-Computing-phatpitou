@@ -156,7 +156,7 @@ else
   fi
 
   echo "Unzipping images..."
-  unzip -o O010QuAjT8yYHUbNNkH4tg_64e1382d4556483296fc0ac48e26faf1_images.zip -d ./images_for_s3/
+  unzip -o images.zip -d ./images_for_s3/
   if [ $? -ne 0 ]; then
     echo "Failed to unzip images."
     exit 1
