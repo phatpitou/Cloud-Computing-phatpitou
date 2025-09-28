@@ -29,60 +29,52 @@
 # 21 Secret Name
 # 22 Database Name
 
-SECRET_ID=$(aws secretsmanager list-secrets --filters Key=name,Values=${21} --query 'SecretList[*].ARN')
+#!/bin/bash
 
-if [ $# = 0 ]
-    then
-    echo "You don't have enough variables in your arugments.txt, perhaps you forgot to run: bash ./create-secrets.sh \$(< ~/arguments.txt)"
+# Check if exactly 22 arguments are provided
+if [ $# -ne 22 ]; then
+    echo "Error: Exactly 22 arguments are required"
     exit 1
-elif [ "$SECRET_ID" == "" ]
-    then
-     echo "You haven't created the secret your named in \$\{21\}..." 
-     echo "Check to see if you ran the command: bash ./create-secrets.sh \$(< ~/arguments.txt)"
-else
-
-    USERVALUE=$(aws secretsmanager get-secret-value --secret-id $SECRET_ID --output=json | jq '.SecretString' | sed 's/[\\n]//g' | sed 's/^"//g' | sed 's/"$//g' | jq '.user' | sed 's/"//g')
-    PASSVALUE=$(aws secretsmanager get-secret-value --secret-id $SECRET_ID --output=json | jq '.SecretString' | sed 's/[\\n]//g' | sed 's/^"//g' | sed 's/"$//g' | jq '.pass' | sed 's/"//g')
-
-    # Create RDS instances
-    # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/index.html
-    echo "******************************************************************************"
-    echo "Creating RDS instance..."
-    echo "******************************************************************************"
-    aws rds create-db-instance --db-instance-identifier  --db-instance-class db.t3.micro --engine --master-username $USERVALUE --master-user-password $PASSVALUE --allocated-storage 20 --db-name employee_database --tags="Key=assessment,Value=${7}"
-    # Add wait command for db-instance available
-    # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/wait/db-instance-available.html
-    echo "******************************************************************************"
-    echo "Waiting for RDS instance: to be created..."
-    echo "This might take around 5-15 minutes..."
-    echo "******************************************************************************"
-    aws rds wait db-instance-available --db-instance-identifier
-    echo "******************************************************************************"
-    echo "RDS instance created and in the available state..."
-    echo "******************************************************************************"
-    # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/create-db-instance-read-replica.html
-    echo "******************************************************************************"
-    echo "Creating RDS read-replica instance..."
-    echo "******************************************************************************"
-    # Append "-read-replica" to the ${22} to create the read-replica name
-    aws rds create-db-instance-read-replica --db-instance-identifier  --source-db-instance-identifier --tags="Key=assessment,Value=${7}"
-
-    # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/wait/db-instance-available.html
-    echo "******************************************************************************"
-    echo "Waiting for RDS read-replica instance to be created..."
-    echo "This might take another 5-15 minutes..."
-    echo "Perhaps check out https://xkcd.com/303/ ..."
-    echo "******************************************************************************"
-    aws rds wait db-instance-available --db-instance-identifier 
-
-    # Fetching RDS address
-    # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/rds/describe-db-instances.html
-    echo "******************************************************************************"
-    echo "Retrieving the RDS Endpoint Address and printing to the screen..."
-    RDS_Address=$(aws rds describe-db-instances --db-instance-identifier --query "")
-    echo $RDS_Address
-    echo "Retrieving the RDS Read Replica Endpoint Address and printing to the screen..."
-    RDS_RR_Address=$(aws rds describe-db-instances --db-instance-identifier  --query "")
-    echo $RDS_RR_Address
-# End of main if
 fi
+
+# Retrieve the secret values
+SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ${21} --query SecretString --output text 2>/dev/null)
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to retrieve secret ${21}. Ensure create-secrets.sh was run first."
+    exit 1
+fi
+
+# Parse JSON to get user and pass
+USERVALUE=$(echo $SECRET_JSON | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['user'])")
+PASSVALUE=$(echo $SECRET_JSON | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['pass'])")
+
+echo "Secret retrieved successfully. User: $USERVALUE"
+
+# Create Primary RDS Instance
+echo "Creating primary RDS instance: ${22}"
+
+aws rds create-db-instance --db-instance-identifier ${22} --db-instance-class db.t3.micro --engine mysql --master-username $USERVALUE --master-user-password "$PASSVALUE" --allocated-storage 20 --db-name employee_database --tags "Key=assessment,Value=${7}"
+
+# Wait for primary instance to be available
+echo "Waiting for primary RDS to be available..."
+aws rds wait db-instance-available --db-instance-identifier ${22}
+
+# Get primary endpoint
+PRIMARY_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier ${22} --query 'DBInstances[0].Endpoint.Address' --output text)
+echo "Primary RDS Endpoint: $PRIMARY_ENDPOINT"
+
+# Create Read-Replica RDS Instance
+echo "Creating read-replica RDS: ${22}-read-replica"
+
+aws rds create-db-instance-read-replica --db-instance-identifier ${22}-read-replica --source-db-instance-identifier ${22} --tags "Key=assessment,Value=${7}"
+
+# Wait for replica to be available
+echo "Waiting for read-replica RDS to be available..."
+aws rds wait db-instance-available --db-instance-identifier ${22}-read-replica
+
+# Get replica endpoint
+REPLICA_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier ${22}-read-replica --query 'DBInstances[0].Endpoint.Address' --output text)
+echo "Read-Replica RDS Endpoint: $REPLICA_ENDPOINT"
+
+echo "RDS creation completed successfully!"
