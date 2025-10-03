@@ -10,9 +10,6 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpcs
 ##############################################################################
 # Configure AWS Provider
-provider "aws" {
-  region = "us-east-2"
-}
 
 # Get default VPC
 data "aws_vpc" "default" {
