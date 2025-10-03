@@ -9,217 +9,214 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpcs
 ##############################################################################
-data "aws_vpc" "main" {
+# Configure AWS Provider
+provider "aws" {
+  region = "us-east-2"
+}
+
+# Get default VPC
+data "aws_vpc" "default" {
   default = true
 }
 
-output "vpcs" {
-  value = data.aws_vpc.main.id
-}
-##############################################################################
-# https://developer.hashicorp.com/terraform/tutorials/configuration-language/data-source
-##############################################################################
-data "aws_availability_zones" "available" {
-  state = "available"
-  /*
+# Get subnets in the availability zones
+data "aws_subnets" "default" {
   filter {
-    name   = "zone-type"
-    values = ["availability-zone"]
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
-*/
-}
-
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/availability_zones
-##############################################################################
-data "aws_availability_zones" "primary" {
-  filter {
-    name   = "zone-name"
-    values = ["us-east-2a"]
-  }
-}
-
-data "aws_availability_zones" "secondary" {
-  filter {
-    name   = "zone-name"
-    values = ["us-east-2b"]
-  }
-}
-
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets
-##############################################################################
-# The data value is essentially a query and or a filter to retrieve values
-data "aws_subnets" "subneta" {
-  filter {
-    name   = "availabilityZone"
-    values = ["us-east-2a"]
-  }
-}
-
-data "aws_subnets" "subnetb" {
-  filter {
-    name   = "availabilityZone"
-    values = ["us-east-2b"]
-  }
-}
-
-data "aws_subnets" "subnetc" {
-  filter {
-    name   = "availabilityZone"
-    values = ["us-east-2c"]
-  }
-}
-
-output "subnetid-2a" {
-  value = [data.aws_subnets.subneta.ids]
-}
-
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb
-##############################################################################
-resource "aws_lb" "lb" {
-  name               = 
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = 
-
-  subnets = [data.aws_subnets.subneta.ids[0], data.aws_subnets.subnetb.ids[0]]
   
-  enable_deletion_protection = false
+  filter {
+    name   = "availability-zone"
+    values = var.az
+  }
+}
 
+# Create S3 bucket for raw images
+resource "aws_s3_bucket" "raw" {
+  bucket = var.raw-s3-bucket
+  
   tags = {
-    Environment = "production"
+    Name = var.module-tag
   }
 }
 
-# output will print a value out to the screen
-output "url" {
-  value = aws_lb.lb.dns_name
-}
-
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group
-##############################################################################
-
-resource "aws_lb_target_group" "alb-lb-tg" {
-  # depends_on is effectively a waiter -- it forces this resource to wait until the listed
-  # resource is ready
-  depends_on  = [aws_lb.lb]
-  name        = 
-  target_type = 
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = 
-}
-
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener
-##############################################################################
-
-resource "aws_lb_listener" "front_end" {
-  load_balancer_arn = aws_lb.lb.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.alb-lb-tg.arn
-  }
-}
-
-##############################################################################
-# Create launch template
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/launch_template
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_template
-##############################################################################
-resource "aws_launch_template" "mp1-lt" {
-  image_id                             = 
-  instance_initiated_shutdown_behavior = "terminate"
-  instance_type                        = 
-  key_name                             = 
-
-  monitoring {
-    enabled = false
-  }
-  placement {
-    availability_zone = data.aws_availability_zones.primary.id
-  }
+# Create S3 bucket for finished images
+resource "aws_s3_bucket" "finished" {
+  bucket = var.finished-s3-bucket
   
-  block_device_mappings {
-    device_name = 
-
-    ebs {
-      volume_size = 
-    }
+  tags = {
+    Name = var.module-tag
   }
+}
 
-  block_device_mappings {
-    device_name = 
+# Make raw bucket public
+resource "aws_s3_bucket_public_access_block" "raw" {
+  bucket = aws_s3_bucket.raw.id
 
-    ebs {
-      volume_size = 
-    }
-  }
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
 
-  network_interfaces {
-  subnet_id = data.aws_subnets.subneta.ids[0]
-  security_groups = [var.vpc_security_group_ids]
-  }
+# Make finished bucket public
+resource "aws_s3_bucket_public_access_block" "finished" {
+  bucket = aws_s3_bucket.finished.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# Bucket policy for raw bucket
+resource "aws_s3_bucket_policy" "raw" {
+  bucket = aws_s3_bucket.raw.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.raw.arn}/*"
+      }
+    ]
+  })
+  
+  depends_on = [aws_s3_bucket_public_access_block.raw]
+}
+
+# Bucket policy for finished bucket
+resource "aws_s3_bucket_policy" "finished" {
+  bucket = aws_s3_bucket.finished.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.finished.arn}/*"
+      }
+    ]
+  })
+  
+  depends_on = [aws_s3_bucket_public_access_block.finished]
+}
+
+# Create Launch Template
+resource "aws_launch_template" "app" {
+  name          = var.lt-name
+  image_id      = var.imageid
+  instance_type = var.instance-type
+  key_name      = var.key-name
+  
+  vpc_security_group_ids = var.vpc_security_group_ids
+  
+  user_data = filebase64(var.install-env-file)
   
   tag_specifications {
     resource_type = "instance"
+    
     tags = {
-      Name = 
+      Name = var.module-tag
     }
   }
-  user_data = filebase64("./install-env.sh")
+  
+  tags = {
+    Name = var.module-tag
+  }
 }
 
-##############################################################################
-# Create autoscaling group
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_group
-##############################################################################
-
-resource "aws_autoscaling_group" "bar" {
-  name                      = 
-  depends_on                = [aws_launch_template.mp1-lt]
-  desired_capacity          = 
-  max_size                  = 
-  min_size                  = 
-  health_check_grace_period = 300
-  health_check_type         = 
-  target_group_arns         = [aws_lb_target_group.alb-lb-tg.arn]
-  vpc_zone_identifier       = [data.aws_subnets.subneta.ids[0], data.aws_subnets.subnetb.ids[0]]
-
-  tag {
-    key                 = "assessment"
-    value               = 
-    propagate_at_launch = true
+# Create Target Group
+resource "aws_lb_target_group" "app" {
+  name     = var.tg-name
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
   }
+  
+  tags = {
+    Name = var.module-tag
+  }
+}
 
+# Create Application Load Balancer
+resource "aws_lb" "app" {
+  name               = var.elb-name
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = var.vpc_security_group_ids
+  subnets            = data.aws_subnets.default.ids
+  
+  tags = {
+    Name = var.module-tag
+  }
+}
+
+# Create Load Balancer Listener
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# Create Auto Scaling Group
+resource "aws_autoscaling_group" "app" {
+  name                = var.asg-name
+  desired_capacity    = var.desired
+  max_size            = var.max
+  min_size            = var.min
+  target_group_arns   = [aws_lb_target_group.app.arn]
+  vpc_zone_identifier = data.aws_subnets.default.ids
+  health_check_type   = "ELB"
+  
   launch_template {
-    id      = aws_launch_template.mp1-lt.id
+    id      = aws_launch_template.app.id
     version = "$Latest"
   }
+  
+  tag {
+    key                 = "Name"
+    value               = var.module-tag
+    propagate_at_launch = true
+  }
 }
 
-##############################################################################
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_attachment
-##############################################################################
-# Create a new ALB Target Group attachment
-
-resource "aws_autoscaling_attachment" "example" {
-  # Wait for lb to be running before attaching to asg
-  depends_on  = [aws_lb.lb]
-  autoscaling_group_name = 
-  lb_target_group_arn    = 
+# Outputs
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.app.dns_name
 }
 
-output "alb-lb-tg-arn" {
-  value = aws_lb_target_group.alb-lb-tg.arn
+output "raw_s3_bucket" {
+  description = "Name of the raw S3 bucket"
+  value       = aws_s3_bucket.raw.bucket
 }
 
-output "alb-lb-tg-id" {
-  value = aws_lb_target_group.alb-lb-tg.id
+output "finished_s3_bucket" {
+  description = "Name of the finished S3 bucket"
+  value       = aws_s3_bucket.finished.bucket
 }
