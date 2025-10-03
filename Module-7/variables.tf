@@ -11,20 +11,98 @@
 
 # Default types are stings, lists, and maps
 
-variable "imageid" {}
-variable "instance-type" {}
-variable "key-name" {}
-variable "vpc_security_group_ids" {}
-variable "cnt" {}
-variable "install-env-file" {}
-variable "az" { default = ["us-east-2a", "us-east2b", "us-east-2c"] }
-variable "elb-name" {}
-variable "tg-name" {}
-variable "asg-name" {}
-variable "lt-name" {}
-variable "min" { default = 2 }
-variable "max" { default = 5 }
-variable "desired" { default = 3 }
-variable "module-tag" {}
-variable "raw-s3-bucket" {}
-variable "finished-s3-bucket" {}
+# AMI and Instance Configuration
+variable "imageid" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+}
+
+variable "instance-type" {
+  description = "EC2 instance type"
+  type        = string
+}
+
+variable "key-name" {
+  description = "SSH key pair name"
+  type        = string
+}
+
+variable "vpc_security_group_ids" {
+  description = "List of security group IDs"
+  type        = list(string)
+}
+
+variable "cnt" {
+  description = "Number of instances"
+  type        = number
+}
+
+variable "install-env-file" {
+  description = "Path to installation script"
+  type        = string
+  default     = "./install-env.sh"
+}
+
+# Availability Zones
+variable "az" {
+  description = "List of availability zones"
+  type        = list(string)
+  default     = ["us-east-2a", "us-east-2b", "us-east-2c"]
+}
+
+# Load Balancer and Scaling Configuration
+variable "elb-name" {
+  description = "Elastic Load Balancer name"
+  type        = string
+}
+
+variable "tg-name" {
+  description = "Target Group name"
+  type        = string
+}
+
+variable "asg-name" {
+  description = "Auto Scaling Group name"
+  type        = string
+}
+
+variable "lt-name" {
+  description = "Launch Template name"
+  type        = string
+}
+
+# Auto Scaling Group Capacity
+variable "min" {
+  description = "Minimum instances in ASG"
+  type        = number
+  default     = 2
+}
+
+variable "max" {
+  description = "Maximum instances in ASG"
+  type        = number
+  default     = 5
+}
+
+variable "desired" {
+  description = "Desired instances in ASG"
+  type        = number
+  default     = 3
+}
+
+# Tags
+variable "module-tag" {
+  description = "Module identification tag"
+  type        = string
+}
+
+# S3 Buckets
+variable "raw-s3-bucket" {
+  description = "S3 bucket for raw images"
+  type        = string
+}
+
+variable "finished-s3-bucket" {
+  description = "S3 bucket for finished images"
+  type        = string
+}
