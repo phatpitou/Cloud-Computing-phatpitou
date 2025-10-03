@@ -23,10 +23,7 @@ data "aws_subnets" "default" {
     values = [data.aws_vpc.default.id]
   }
   
-  filter {
-    name   = "availability-zone"
-    values = var.az
-  }
+
 }
 
 # Create S3 bucket for raw images
