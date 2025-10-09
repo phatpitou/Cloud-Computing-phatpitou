@@ -1,32 +1,92 @@
-#Types
-#The Terraform language uses the following types for its values:
+# Variables for ITMO-544 Final Assessment
 
-# https://developer.hashicorp.com/terraform/language/expressions/types
-# string: a sequence of Unicode characters representing some text, like "hello".
-# number: a numeric value. The number type can represent both whole numbers like 15 and fractional values like 6.283185.
-# bool: a boolean value, either true or false. bool values can be used in conditional logic.
-# list (or tuple): a sequence of values, like ["us-west-1a", "us-west-1c"]. Identify elements in a list with consecutive whole numbers, starting with zero.
-# set: a collection of unique values that do not have any secondary identifiers or ordering.
-# map (or object): a group of values identified by named labels, like {name = "Mabel", age = 52}.
 
-# Default types are stings, lists, and maps
+variable "elb-name" {
+  description = "Name for Elastic Load Balancer"
+  type        = string
+  default     = "pt-elb"
+}
 
-variable "imageid" {}
-variable "instance-type" {}
-variable "key-name" {}
-variable "vpc_security_group_ids" {}
-variable "cnt" {}
-variable "install-env-file" {}
-variable "az" { default = ["us-east-2a", "us-east2b", "us-east-2c"] }
-variable "elb-name" {}
-variable "tg-name" {}
-variable "asg-name" {}
-variable "lt-name" {}
-variable "min" { default = 2 }
-variable "max" { default = 5 }
-variable "desired" { default = 3 }
-variable "raw-s3" {}
-variable "finished-s3" {}
-variable "dynamodb-table-name" {}
-variable "module-tag" {}
-variable "ebs-size" {}
+variable "tg-name" {
+  description = "Name for Target Group"
+  type        = string
+  default     = "pt-tg"
+}
+
+variable "lt-name" {
+  description = "Name for Launch Template"
+  type        = string
+  default     = "pt-lt"
+}
+
+variable "asg-name" {
+  description = "Name for Auto Scaling Group"
+  type        = string
+  default     = "pt-asg"
+}
+
+variable "imageid" {
+  description = "AMI ID for instances (us-east-1 Amazon Linux 2)"
+  type        = string
+  default     = "ami-0c02fb55956c7d316" 
+}
+
+variable "instance-type" {
+  description = "EC2 instance type (must be t2.micro for tests)"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "key-name" {
+  description = "EC2 Key Pair name"
+  type        = string
+  default     = "coursera-key"  
+}
+
+variable "vpc_security_group_ids" {
+  description = "Security Group ID (allows HTTP 80)"
+  type        = string
+  default     = "sg-0b1a68d08a66f0a1b"  
+}
+
+variable "install-env-file" {
+  description = "Path to user_data script (Nginx install)"
+  type        = string
+  default     = "install-env.sh"
+}
+
+variable "cnt" {
+  description = "Desired capacity for ASG (3 for tests)"
+  type        = number
+  default     = 3
+}
+
+variable "ebs-size" {
+  description = "Size for additional EBS volumes (15GB)"
+  type        = number
+  default     = 15
+}
+
+variable "dynamodb-table-name" {
+  description = "DynamoDB table name"
+  type        = string
+  default     = "pt-database"
+}
+
+variable "module-tag" {
+  description = "Common tag for all resources (must be module-final-tag for tests)"
+  type        = string
+  default     = "module-final-tag"
+}
+
+variable "raw-s3" {
+  description = "Name for raw images S3 bucket (unique)"
+  type        = string
+  default     = "pt-raw-images-2402"  
+}
+
+variable "finished-s3" {
+  description = "Name for finished images S3 bucket (unique)"
+  type        = string
+  default     = "pt-processed-images-2402"  
+}

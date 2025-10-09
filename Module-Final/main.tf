@@ -172,10 +172,10 @@ resource "aws_autoscaling_group" "asg" {
   vpc_zone_identifier       = [data.aws_subnets.subneta.ids[0], data.aws_subnets.subnetb.ids[0]]
   target_group_arns         = [aws_lb_target_group.tg.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300  # Using your "3" as grace period if intended; adjust if not
+  health_check_grace_period = 300
 
-  min_size         = 1  # From your list (updated for tests)
-  max_size         = 3  # From your list (updated for tests)
+  min_size         = 1
+  max_size         = 3
   desired_capacity = var.cnt
 
   launch_template {
@@ -200,12 +200,12 @@ resource "aws_autoscaling_group" "asg" {
 resource "aws_autoscaling_attachment" "asg_attachment" {
   depends_on             = [aws_autoscaling_group.asg]
   autoscaling_group_name = aws_autoscaling_group.asg.id
-  target_group_arn       = aws_lb_target_group.tg.arn
+  alb_target_group_arn   = aws_lb_target_group.tg.arn
 }
 
 # S3 Buckets (raw and finished, with public access disabled for security)
 resource "aws_s3_bucket" "raw" {
-  bucket = var.xxx-raw-s3
+  bucket = var.raw-s3
   force_destroy = true
 
   tags = {
@@ -223,7 +223,7 @@ resource "aws_s3_bucket_public_access_block" "raw" {
 }
 
 resource "aws_s3_bucket" "finished" {
-  bucket = var.xxx-finished-s3
+  bucket = var.finished-s3
   force_destroy = true
 
   tags = {
@@ -271,13 +271,13 @@ resource "aws_dynamodb_table_item" "sample" {
   hash_key   = aws_dynamodb_table.table.hash_key
   range_key  = aws_dynamodb_table.table.range_key
 
-  item = {
-    "Email"        = jsonencode({ "S" = "pt@example.com" })
-    "RecordNumber" = jsonencode({ "S" = "pt-sample-uuid-1234" })
-    "CustomerName" = jsonencode({ "S" = "PT User" })
-    "Phone"        = jsonencode({ "S" = "123-456-7890" })
-    "Stat"         = jsonencode({ "N" = "0" })
-    "RAWS3URL"     = jsonencode({ "S" = "" })
-    "FINISHEDS3URL" = jsonencode({ "S" = "" })
-  }
+  item = jsonencode({
+    "Email"        = { "S" = "pt@example.com" }
+    "RecordNumber" = { "S" = "pt-sample-uuid-1234" }
+    "CustomerName" = { "S" = "PT User" }
+    "Phone"        = { "S" = "123-456-7890" }
+    "Stat"         = { "N" = "0" }
+    "RAWS3URL"     = { "S" = "" }
+    "FINISHEDS3URL" = { "S" = "" }
+  })
 }
