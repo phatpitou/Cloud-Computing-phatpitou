@@ -271,13 +271,13 @@ resource "aws_dynamodb_table_item" "sample" {
   hash_key   = aws_dynamodb_table.table.hash_key
   range_key  = aws_dynamodb_table.table.range_key
 
-  item = jsonencode({
-    Email = "pt@example.com"  # Customized for "pt"
-    RecordNumber = "pt-sample-uuid-1234"
-    CustomerName = "PT User"
-    Phone = "123-456-7890"
-    Stat = 0
-    RAWS3URL = ""
-    FINSIHEDS3URL = ""
-  })
+  item = {
+    "Email"        = jsonencode({ "S" = "pt@example.com" })
+    "RecordNumber" = jsonencode({ "S" = "pt-sample-uuid-1234" })
+    "CustomerName" = jsonencode({ "S" = "PT User" })
+    "Phone"        = jsonencode({ "S" = "123-456-7890" })
+    "Stat"         = jsonencode({ "N" = "0" })
+    "RAWS3URL"     = jsonencode({ "S" = "" })
+    "FINISHEDS3URL" = jsonencode({ "S" = "" })
+  }
 }
