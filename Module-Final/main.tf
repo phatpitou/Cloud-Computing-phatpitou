@@ -200,7 +200,7 @@ resource "aws_autoscaling_group" "asg" {
 resource "aws_autoscaling_attachment" "asg_attachment" {
   depends_on             = [aws_autoscaling_group.asg]
   autoscaling_group_name = aws_autoscaling_group.asg.id
-  alb_target_group_arn   = aws_lb_target_group.tg.arn
+  lb_target_group_arn   = aws_lb_target_group.tg.arn
 }
 
 # S3 Buckets (raw and finished, with public access disabled for security)
