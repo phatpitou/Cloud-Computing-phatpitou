@@ -189,7 +189,7 @@ resource "aws_autoscaling_group" "asg" {
     propagate_at_launch = true
   }
 
-  availability_zones = [data.aws_availability_zones.primary.names[0], data.aws_availability_zones.secondary.names[0]]
+  # Removed: availability_zones (conflicts with vpc_zone_identifier)
 
   lifecycle {
     create_before_destroy = true
