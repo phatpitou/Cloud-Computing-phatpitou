@@ -14,3 +14,4 @@ raw-s3                 = "pt-raw-images-2402"
 finished-s3            = "pt-processed-images-2402"
 dynamodb-table-name    = "pt-database"
 ebs-size               = "15"
+s
